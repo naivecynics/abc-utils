@@ -5,6 +5,7 @@ from multiprocessing import Pool
 from tqdm import tqdm
 import os
 import sys
+import shutil
 import tempfile
 
 script_dir = Path(__file__).parent
@@ -48,10 +49,21 @@ def xml2abc(input_path: Path, output_path: Path):
 
 def abc2xml(input_path: Path, output_path: Path):
     script_path = script_dir / "EasyABC" / "abc2xml.py"
-    command = f'python "{script_path}" "{str(input_path.absolute())}" -o "{str(output_path.absolute())}"'
-    result = subprocess.run(command, capture_output=True, text=True, shell=True)
+    
+    # Patch for abc2xml.py requiring a .abc extension
+    with tempfile.NamedTemporaryFile(mode='w+', suffix=".abc", delete=True, encoding='utf-8') as temp_input_file:
+        shutil.copyfile(input_path, temp_input_file.name)
+        command = f'python "{script_path}" "{temp_input_file.name}"'
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
+
     if result.returncode != 0:
-        raise RuntimeError(f"abc2xml.py failed: {result.stderr}")
+        raise RuntimeError(f"xml2abc.py failed: {result.stderr}")
+    
+    if not result.stdout:
+        raise RuntimeError("xml2abc.py produced no output.")
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(result.stdout)
 
 def abc2abci(input_path: Path, output_path: Path):
     from abctoolkit.rotate import rotate_abc
@@ -99,7 +111,7 @@ class BatchProcessor:
         self._setup_directories()
         
         files_to_process = []
-        for glob_pattern in self.in_gloglobs:
+        for glob_pattern in self.in_globs:
             files_to_process.extend(self.input_dir.rglob(glob_pattern))
         
         files_to_process = sorted(list(set(files_to_process)))
@@ -143,10 +155,10 @@ def main():
         "midi2xml": {"func": midi2xml, "in_globs": "*.mid",  "out_suffix": ".mxl"},
         "xml2midi": {"func": xml2midi, "in_globs": xml_exts, "out_suffix": ".mid"},
         "xml2abc":  {"func": xml2abc,  "in_globs": xml_exts, "out_suffix": ".abc"},
-        "abc2xml":  {"func": abc2xml,  "in_globs": "*.abc",  "out_suffix": ".mxl"},
+        "abc2xml":  {"func": abc2xml,  "in_globs": "*.abc",  "out_suffix": ".xml"},
         "abc2abci": {"func": abc2abci, "in_globs": "*.abc",  "out_suffix": ".abci"},
         "abci2abc": {"func": abci2abc, "in_globs": "*.abci", "out_suffix": ".abc"},
-        "abci2xml": {"func": abc2xml,  "in_globs": "*.abci", "out_suffix": ".mxl"},
+        "abci2xml": {"func": abc2xml,  "in_globs": "*.abci", "out_suffix": ".xml"},
     }
 
     conversion_chains = {
@@ -172,10 +184,12 @@ def main():
 
     chain = conversion_chains[mode]
     
+    if args.temp_dir:
+        Path(args.temp_dir).mkdir(parents=True, exist_ok=True)
+
     if args.keep_temp:
-        temp_dir_base = args.temp_dir if args.temp_dir else None
         # Manually create a persistent temporary directory
-        temp_dir = tempfile.mkdtemp(prefix="converter_", dir=temp_dir_base)
+        temp_dir = tempfile.mkdtemp(prefix="converter_", dir=args.temp_dir)
         print(f"Temporary directory will be kept at: {temp_dir}")
         try:
             run_chain(chain, args.input_dir, args.output_dir, step_definitions, temp_dir)
@@ -183,11 +197,8 @@ def main():
             # Don't clean up when keep_temp is True
             pass
     else:
-        temp_dir_base = args.temp_dir if args.temp_dir else None
-        if temp_dir_base:
-            Path(temp_dir_base).mkdir(parents=True, exist_ok=True)
         # Use context manager for automatic cleanup
-        with tempfile.TemporaryDirectory(prefix="converter_", dir=temp_dir_base) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="converter_", dir=args.temp_dir) as temp_dir:
             run_chain(chain, args.input_dir, args.output_dir, step_definitions, temp_dir)
             
     print("\nAll steps completed.")

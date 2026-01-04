@@ -46,7 +46,7 @@ def run_cmd(cmd: list, timeout: int = 180) -> Tuple[str, str]:
     return out.decode("utf-8", "ignore"), err.decode("utf-8", "ignore")
 
 def abc_to_musicxml(abc_path: Path, xml_path: Path, py: str) -> None:
-    script = ROOT / "abc2xml.py"
+    script = ROOT / 'EasyABC' / "abc2xml.py"
     if not script.exists():
         raise FileNotFoundError(f"Missing abc2xml.py at {script}")
     out, _ = run_cmd([py, str(script), str(abc_path)])
