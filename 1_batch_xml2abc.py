@@ -1,5 +1,4 @@
 import os
-import math
 import random
 import argparse
 import subprocess

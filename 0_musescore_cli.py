@@ -29,9 +29,7 @@ def convert(
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='Converts a directory of score files using MuseScore CLI.'
-    )
+    parser = argparse.ArgumentParser(description='Converts a directory of score files using MuseScore CLI.')
     parser.add_argument('-i', '--input_directory', default="scores", help='The input directory')
     parser.add_argument('-o', '--output_directory', default=None, help='The output directory (if omitted, same as input)')
     parser.add_argument('--in_format', default="mscx", help='Input file format (e.g. mscx, mscz, mid)')
