@@ -134,7 +134,7 @@ class BatchProcessor:
         
         print(f"Step complete. Output in: {self.output_dir}")
         if self.log_file.exists():
-            print(f"Errors (if any) logged in: {self.log_file}")
+            print(f"Errors logged in: {self.log_file}")
         return True
 
 
@@ -215,7 +215,9 @@ def run_chain(chain, input_dir, output_dir, step_definitions, temp_dir):
         if is_last_step:
             current_output_dir = output_dir
         else:
-            temp_step_dir = Path(temp_dir) / f"step_{i+1}"
+            # Name temp directories after the format they contain
+            folder_name = step_config["out_suffix"].lstrip('.')
+            temp_step_dir = Path(temp_dir) / folder_name
             current_output_dir = str(temp_step_dir)
         
         processor = BatchProcessor(

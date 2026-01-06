@@ -9,6 +9,7 @@ import shutil
 import argparse
 import traceback
 import subprocess
+import tempfile
 from tqdm import tqdm
 from pathlib import Path
 from typing import Optional, Tuple
@@ -49,9 +50,17 @@ def abc_to_musicxml(abc_path: Path, xml_path: Path, py: str) -> None:
     script = ROOT / 'EasyABC' / "abc2xml.py"
     if not script.exists():
         raise FileNotFoundError(f"Missing abc2xml.py at {script}")
-    out, _ = run_cmd([py, str(script), str(abc_path)])
+
+    # Patch for abc2xml.py requiring a .abc extension
+    with tempfile.NamedTemporaryFile(mode='w+', suffix=".abc", delete=True, encoding='utf-8') as temp_input_file:
+        shutil.copyfile(abc_path, temp_input_file.name)
+        
+        # Call abc2xml.py with the temporary .abc file
+        out, _ = run_cmd([py, str(script), temp_input_file.name])
+
     if not out.strip():
         raise RuntimeError(f"Empty MusicXML output: {abc_path}")
+    
     xml_path.parent.mkdir(parents=True, exist_ok=True)
     xml_path.write_text(out, encoding="utf-8")
 
@@ -117,13 +126,14 @@ def compile_one(mscore_bin: str, py: str, abc_file: Path, out_dir: Path, root: P
         return None
 
 def scan_and_build(mscore_bin: str, py: str, src_dir: Path, out_dir: Path, root: Path, build_audio: bool, state: dict) -> None:
-    for p in src_dir.rglob("*.abc"):
-        if not p.is_file():
-            continue
-        mtime = p.stat().st_mtime
-        if p not in state or mtime > state[p]:
-            compile_one(mscore_bin, py, p, out_dir, root, build_audio)
-            state[p] = mtime
+    for p in src_dir.rglob("*"):
+        if p.suffix in {".abc", ".abci"}:
+            if not p.is_file():
+                continue
+            mtime = p.stat().st_mtime
+            if p not in state or mtime > state[p]:
+                compile_one(mscore_bin, py, p, out_dir, root, build_audio)
+                state[p] = mtime
 
 def batch_build(mscore_bin: str, py: str, src_dir: Path, out_dir: Path, root: Path, build_audio: bool, quiet: bool) -> dict:
     abc_files = [p for p in src_dir.rglob("*.abc") if p.is_file()]
@@ -157,7 +167,7 @@ def main():
     args = parse_args()
     src_dir = args.src.resolve()
     out_dir = args.out.resolve()
-    root = ROOT
+    root = src_dir  # Use the source directory as the root for relative paths
     mscore_bin = find_musescore(args.mscore)
     build_audio = not args.no_audio
     print(f"MuseScore: {mscore_bin}")
