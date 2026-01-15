@@ -5,8 +5,10 @@ from multiprocessing import Pool
 from tqdm import tqdm
 import os
 import sys
-import shutil
 import tempfile
+
+# NOTE: This path is macOS-specific. Adjust for other operating systems.
+MUSESCORE_CLI = "/Applications/MuseScore 4.app/Contents/MacOS/mscore"
 
 script_dir = Path(__file__).parent
 sys.path.append(str(script_dir))
@@ -15,12 +17,11 @@ sys.path.append(str(script_dir / "abctoolkit"))
 
 # --- 1. Core Single-Step Processing Functions ---
 
-def musescore_convert(input_path: Path, output_path: Path, mode: str):
-    musescore_app = "/Applications/MuseScore 4.app/Contents/MacOS/mscore"
-    if not Path(musescore_app).exists():
-        raise FileNotFoundError(f"MuseScore not found at: {musescore_app}")
+def musescore_convert(input_path: Path, output_path: Path):
+    if not Path(MUSESCORE_CLI).exists():
+        raise FileNotFoundError(f"MuseScore not found at: {MUSESCORE_CLI}")
     
-    command = f'"{musescore_app}" -o "{str(output_path.absolute())}" "{str(input_path.absolute())}"'
+    command = f'"{MUSESCORE_CLI}" -o "{str(output_path.absolute())}" "{str(input_path.absolute())}"'
     process = subprocess.run(command, capture_output=True, text=True, shell=True)
     
     if process.returncode != 0 or not output_path.exists():
@@ -32,6 +33,12 @@ def midi2xml(input_path: Path, output_path: Path):
 
 def xml2midi(input_path: Path, output_path: Path):
     musescore_convert(input_path, output_path, "xml2midi")
+
+def xml2mp3(input_path: Path, output_path: Path):
+    musescore_convert(input_path, output_path)
+
+def midi2mp3(input_path: Path, output_path: Path):
+    musescore_convert(input_path, output_path)
 
 def xml2abc(input_path: Path, output_path: Path):
     script_path = script_dir / "EasyABC" / "xml2abc.py"
@@ -52,15 +59,17 @@ def abc2xml(input_path: Path, output_path: Path):
     
     # Patch for abc2xml.py requiring a .abc extension
     with tempfile.NamedTemporaryFile(mode='w+', suffix=".abc", delete=True, encoding='utf-8') as temp_input_file:
-        shutil.copyfile(input_path, temp_input_file.name)
+        with open(input_path, 'r', encoding='utf-8') as f_in:
+            temp_input_file.write(f_in.read())
+        temp_input_file.flush()
         command = f'python "{script_path}" "{temp_input_file.name}"'
         result = subprocess.run(command, capture_output=True, text=True, shell=True)
 
     if result.returncode != 0:
-        raise RuntimeError(f"xml2abc.py failed: {result.stderr}")
+        raise RuntimeError(f"abc2xml.py failed: {result.stderr}")
     
     if not result.stdout:
-        raise RuntimeError("xml2abc.py produced no output.")
+        raise RuntimeError("abc2xml.py produced no output.")
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(result.stdout)
@@ -159,6 +168,8 @@ def main():
         "abc2abci": {"func": abc2abci, "in_globs": "*.abc",  "out_suffix": ".abci"},
         "abci2abc": {"func": abci2abc, "in_globs": "*.abci", "out_suffix": ".abc"},
         "abci2xml": {"func": abc2xml,  "in_globs": "*.abci", "out_suffix": ".xml"},
+        "xml2mp3":  {"func": xml2mp3,  "in_globs": xml_exts, "out_suffix": ".mp3"},
+        "midi2mp3": {"func": midi2mp3, "in_globs": "*.mid",  "out_suffix": ".mp3"},
     }
 
     conversion_chains = {
@@ -174,6 +185,10 @@ def main():
         "abci2midi": ["abci2abc", "abc2xml", "xml2midi"],
         "xml2abci": ["xml2abc", "abc2abci"],
         "abci2xml": ["abci2xml"],
+        "xml2mp3":  ["xml2mp3"],
+        "midi2mp3": ["midi2mp3"],
+        "abc2mp3":  ["abc2xml", "xml2mp3"],
+        "abci2mp3": ["abci2abc", "abc2xml", "xml2mp3"],
     }
 
     mode = args.mode.lower()
