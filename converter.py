@@ -42,7 +42,7 @@ def midi2mp3(input_path: Path, output_path: Path):
 
 def xml2abc(input_path: Path, output_path: Path):
     script_path = script_dir / "EasyABC" / "xml2abc.py"
-    command = f'python "{script_path}" -d 8 -c 6 -x "{str(input_path.absolute())}"'
+    command = f'python "{script_path}" -d 8 -c 6 -m 0 -x -n 1000000 -b 1000000 "{str(input_path.absolute())}"'
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     
     if result.returncode != 0:
