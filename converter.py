@@ -29,10 +29,10 @@ def musescore_convert(input_path: Path, output_path: Path):
         raise RuntimeError(f"MuseScore conversion failed: {error_message}")
 
 def midi2xml(input_path: Path, output_path: Path):
-    musescore_convert(input_path, output_path, "midi2xml")
+    musescore_convert(input_path, output_path)
 
 def xml2midi(input_path: Path, output_path: Path):
-    musescore_convert(input_path, output_path, "xml2midi")
+    musescore_convert(input_path, output_path)
 
 def xml2mp3(input_path: Path, output_path: Path):
     musescore_convert(input_path, output_path)
